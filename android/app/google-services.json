@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "274671534628",
+    "project_id": "siva-odoo",
+    "storage_bucket": "siva-odoo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:274671534628:android:12d2669c95f3d1355a0eb1",
+        "android_client_info": {
+          "package_name": "com.example.odoo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDpkQ6wh0RKfidDZI2mScxgyJNxHK1cuO0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
