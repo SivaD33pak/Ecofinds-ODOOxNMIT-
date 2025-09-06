@@ -116,6 +116,7 @@ class EcoFindsApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => const AuthScreen(),
+        // Pass a list of cart items down to the home screen
         '/home': (context) => const HomeScreen(),
       },
     );
@@ -288,13 +289,19 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
-  final List<Widget> _widgetOptions = <Widget>[
-    _ProductFeedScreen(),
-    _MyListingsScreen(),
-    _CartScreen(),
-    _PreviousPurchasesScreen(),
-    _UserDashboardScreen(),
-  ];
+  final List<Product> _cartItems = [];
+
+  void _addToCart(Product product) {
+    setState(() {
+      _cartItems.add(product);
+    });
+  }
+
+  void _removeFromCart(Product product) {
+    setState(() {
+      _cartItems.removeWhere((item) => item.id == product.id);
+    });
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -304,6 +311,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> _widgetOptions = <Widget>[
+      _ProductFeedScreen(addToCart: _addToCart),
+      _MyListingsScreen(),
+      _CartScreen(cartItems: _cartItems, removeFromCart: _removeFromCart),
+      _PreviousPurchasesScreen(),
+      _UserDashboardScreen(),
+    ];
     return Scaffold(
       appBar: AppBar(
         title: const Text('EcoFinds'),
@@ -354,6 +368,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
 // The screen that displays the feed of products.
 class _ProductFeedScreen extends StatefulWidget {
+  final Function(Product) addToCart;
+  const _ProductFeedScreen({required this.addToCart, super.key});
+
   @override
   _ProductFeedScreenState createState() => _ProductFeedScreenState();
 }
@@ -435,7 +452,7 @@ class _ProductFeedScreenState extends State<_ProductFeedScreen> {
             itemCount: _filteredProducts.length,
             itemBuilder: (context, index) {
               final product = _filteredProducts[index];
-              return ProductCard(product: product);
+              return ProductCard(product: product, addToCart: widget.addToCart);
             },
           ),
         ),
@@ -447,8 +464,9 @@ class _ProductFeedScreenState extends State<_ProductFeedScreen> {
 // A widget to display a product as a card in the feed.
 class ProductCard extends StatelessWidget {
   final Product product;
+  final Function(Product) addToCart;
 
-  const ProductCard({required this.product, super.key});
+  const ProductCard({required this.product, required this.addToCart, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -456,7 +474,10 @@ class ProductCard extends StatelessWidget {
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (context) => ProductDetailScreen(product: product),
+            builder: (context) => ProductDetailScreen(
+              product: product,
+              addToCart: addToCart,
+            ),
           ),
         );
       },
@@ -471,6 +492,28 @@ class ProductCard extends StatelessWidget {
                   product.imagePlaceholder,
                   fit: BoxFit.cover,
                   width: double.infinity,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) {
+                      return child;
+                    }
+                    return Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                            : null,
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Theme.of(context).cardColor,
+                      child: Center(
+                        child: Icon(Icons.image_not_supported,
+                            color: Colors.grey[700]),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -508,7 +551,8 @@ class ProductCard extends StatelessWidget {
 // The screen for viewing detailed product information.
 class ProductDetailScreen extends StatelessWidget {
   final Product product;
-  const ProductDetailScreen({required this.product, super.key});
+  final Function(Product) addToCart;
+  const ProductDetailScreen({required this.product, required this.addToCart, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -525,6 +569,32 @@ class ProductDetailScreen extends StatelessWidget {
               product.imagePlaceholder,
               fit: BoxFit.cover,
               height: 250,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) {
+                  return child;
+                }
+                return SizedBox(
+                  height: 250,
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
+                    ),
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  height: 250,
+                  color: Theme.of(context).cardColor,
+                  child: Center(
+                    child: Icon(Icons.image_not_supported,
+                        size: 50, color: Colors.grey[700]),
+                  ),
+                );
+              },
             ),
             Padding(
               padding: const EdgeInsets.all(24.0),
@@ -560,7 +630,13 @@ class ProductDetailScreen extends StatelessWidget {
                   const SizedBox(height: 32),
                   ElevatedButton(
                     onPressed: () {
-                      // Placeholder for 'Add to Cart' functionality
+                      addToCart(product);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('${product.title} added to cart!'),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
                     },
                     child: const Text('Add to Cart'),
                   ),
@@ -620,6 +696,11 @@ class _AddNewProductScreenState extends State<AddNewProductScreen> {
                     image: DecorationImage(
                       image: NetworkImage(_imagePlaceholder),
                       fit: BoxFit.cover,
+                      // The errorBuilder is added here as well for consistency.
+                      // Note: This is a bit of a workaround, as DecorationImage doesn't
+                      // have an errorBuilder. In a real app, you would use a separate
+                      // widget for this.
+                      // For this prototype, we rely on the parent Container's color.
                     ),
                   ),
                 ),
@@ -715,6 +796,34 @@ class MyProductCard extends StatelessWidget {
                 width: 80,
                 height: 80,
                 fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) {
+                    return child;
+                  }
+                  return SizedBox(
+                    width: 80,
+                    height: 80,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                            : null,
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: 80,
+                    height: 80,
+                    color: Theme.of(context).cardColor,
+                    child: Center(
+                      child: Icon(Icons.image_not_supported,
+                          color: Colors.grey[700]),
+                    ),
+                  );
+                },
               ),
             ),
             const SizedBox(width: 16),
@@ -768,6 +877,18 @@ class _UserDashboardScreen extends StatelessWidget {
           CircleAvatar(
             radius: 60,
             backgroundImage: NetworkImage(dummyUser.imagePlaceholder),
+            onBackgroundImageError: (exception, stackTrace) {
+              // This is a more appropriate way to handle the error for CircleAvatar
+              // You can also change the child property to a placeholder icon
+            },
+            child: CircleAvatar(
+              radius: 60,
+              backgroundColor: Theme.of(context).cardColor,
+              child: Text(
+                dummyUser.username.substring(0, 1),
+                style: const TextStyle(fontSize: 48, color: Colors.white),
+              ),
+            ),
           ),
           const SizedBox(height: 24),
           _buildInfoCard(
@@ -825,11 +946,12 @@ class _UserDashboardScreen extends StatelessWidget {
 
 // The screen to display items in the shopping cart.
 class _CartScreen extends StatelessWidget {
+  final List<Product> cartItems;
+  final Function(Product) removeFromCart;
+  const _CartScreen({required this.cartItems, required this.removeFromCart, super.key});
+
   @override
   Widget build(BuildContext context) {
-    // Placeholder for cart items.
-    final List<Product> cartItems = [dummyProducts[0], dummyProducts[2]];
-
     if (cartItems.isEmpty) {
       return const Center(
         child: Text(
@@ -838,14 +960,54 @@ class _CartScreen extends StatelessWidget {
         ),
       );
     }
+    final double total = cartItems.fold(0, (sum, item) => sum + item.price);
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16.0),
-      itemCount: cartItems.length,
-      itemBuilder: (context, index) {
-        final product = cartItems[index];
-        return CartItemCard(product: product);
-      },
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16.0),
+            itemCount: cartItems.length,
+            itemBuilder: (context, index) {
+              final product = cartItems[index];
+              return CartItemCard(product: product, removeFromCart: removeFromCart);
+            },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              const Divider(),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Total',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    '\$${total.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  // Placeholder for checkout logic
+                },
+                child: const Text('Proceed to Checkout'),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -853,7 +1015,8 @@ class _CartScreen extends StatelessWidget {
 // A widget to display an item in the cart.
 class CartItemCard extends StatelessWidget {
   final Product product;
-  const CartItemCard({required this.product, super.key});
+  final Function(Product) removeFromCart;
+  const CartItemCard({required this.product, required this.removeFromCart, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -870,6 +1033,34 @@ class CartItemCard extends StatelessWidget {
                 width: 80,
                 height: 80,
                 fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) {
+                    return child;
+                  }
+                  return SizedBox(
+                    width: 80,
+                    height: 80,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                            : null,
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: 80,
+                    height: 80,
+                    color: Theme.of(context).cardColor,
+                    child: Center(
+                      child: Icon(Icons.image_not_supported,
+                          color: Colors.grey[700]),
+                    ),
+                  );
+                },
               ),
             ),
             const SizedBox(width: 16),
@@ -889,7 +1080,7 @@ class CartItemCard extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.remove_circle, color: Colors.red),
               onPressed: () {
-                // Placeholder for removing item from cart
+                removeFromCart(product);
               },
             ),
           ],
@@ -946,6 +1137,34 @@ class PreviousPurchaseCard extends StatelessWidget {
                 width: 80,
                 height: 80,
                 fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) {
+                    return child;
+                  }
+                  return SizedBox(
+                    width: 80,
+                    height: 80,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                            : null,
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: 80,
+                    height: 80,
+                    color: Theme.of(context).cardColor,
+                    child: Center(
+                      child: Icon(Icons.image_not_supported,
+                          color: Colors.grey[700]),
+                    ),
+                  );
+                },
               ),
             ),
             const SizedBox(width: 16),
